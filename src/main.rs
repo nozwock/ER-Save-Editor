@@ -51,7 +51,11 @@ fn main() -> Result<(), eframe::Error> {
         visuals.window_rounding = Rounding::default().at_least(rounding);
         visuals.window_highlight_topmost = false;
         creation_context.egui_ctx.set_visuals(visuals);
-        creation_context.egui_ctx.set_zoom_factor(1.75);
+
+        if creation_context.storage.is_none() {
+            creation_context.egui_ctx.set_zoom_factor(1.5);
+        }
+
         Box::new(App::new(creation_context))
     }))
 }

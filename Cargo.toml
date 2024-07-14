@@ -8,7 +8,7 @@ aes = "0.8.4"
 binary-reader = "0.4.5"
 bitflags = "2.4.2"
 cbc = "0.1.2"
-eframe = "0.27"
+eframe = { version = "0.27", features = ["persistence"] }
 egui-phosphor = { version = "0.5", features = ["regular", "fill"] }
 egui_extras = "0.27"
 encoding_rs = "0.8.33"
