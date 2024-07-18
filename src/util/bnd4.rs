@@ -312,14 +312,17 @@ pub mod bnd4 {
             if br.length < 4 {
                 return false;
             }
-            let magic = br.read_bytes(4).unwrap();
+
+            let magic = br.read_bytes(4).unwrap_or_default();
+
             magic == b"BND4"
         }
 
         pub fn from_bytes(bytes: &[u8]) -> Result<BND4, Error>{
             let mut br = BinaryReader::from_u8(bytes);
             let mut bnd4 = BND4::new();
-            bnd4.read(&mut br).expect("");
+            bnd4.read(&mut br)?;
+
             Ok(bnd4)
         }
 
@@ -328,6 +331,7 @@ pub mod bnd4 {
             for file_header in file_headers {
                 self.files.push(file_header.read_file_data(br)?);
             }
+
             Ok(())
         }
 

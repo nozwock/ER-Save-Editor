@@ -55,23 +55,18 @@ pub mod validator {
                 let gem_ga_item = ga_item_gems[&current_weapon_gem];
                 let res_gem = gems.get(&gem_ga_item.item_id);
 
-                // Check if gem_param exists, fail if it doesn't
-                if res_gem.is_none() {
+                if let (Some(weapon_param), Some(gem_param)) = (res_weapon, res_gem) {
+                    // Ash of war on an item that doesn't support it. 
+                    if weapon_param.data.gemMountType == 0 {
+                        return false;
+                    }
+
+                    // Ash of war not valid
+                    if !Self::validate_attached_gem(WepType::from(weapon_param.data.wepType), gem_param) {
+                        return false
+                    }
+                } else {
                     return false;
-                }
-
-                // Unwrap weapon and gem params
-                let weapon_param = res_weapon.unwrap();
-                let gem_param = res_gem.unwrap();
-
-                // Ash of war on an item that doesn't support it. 
-                if weapon_param.data.gemMountType == 0 {
-                    return false;
-                }
-
-                // Ash of war not valid
-                if !Self::validate_attached_gem(WepType::from(weapon_param.data.wepType), gem_param) {
-                    return false
                 }
             }
 
@@ -165,11 +160,21 @@ pub mod validator {
         // region: utils
 
         fn validate_armor_piece(id: u32, protector_category: ProtectorCategory) -> bool {
-            let res_armor_piece = Regulation::equip_protectors_param_map().get(&id);
-            if  res_armor_piece.is_none() { return false; }
-            let armor_piece = res_armor_piece.unwrap();
-            let armor_piece_pc =  ProtectorCategory::try_from(armor_piece.data.protectorCategory);
-            if armor_piece_pc.is_err() || armor_piece_pc.unwrap() != protector_category {return false;}
+            let armor_piece_pc = Regulation::equip_protectors_param_map()
+                .get(&id)
+                .map(|it| ProtectorCategory::try_from(it.data.protectorCategory))
+                .transpose()
+                .ok()
+                .flatten();
+
+            if let Some(pc) = armor_piece_pc {
+                if pc != protector_category {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+
             true
         }
 

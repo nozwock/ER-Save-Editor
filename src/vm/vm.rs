@@ -61,7 +61,7 @@ pub mod vm {
             let mut vm = ViewModel::default();
 
             // Init params
-            Regulation::init_params(save);
+            Regulation::init_params(save).unwrap(); // note: Unsure what to do here
 
             // Check for irregular data
             vm.active = Some(Validator::validate(save));
