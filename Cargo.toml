@@ -5,10 +5,12 @@ edition = "2021"
 
 [dependencies]
 aes = "0.8.4"
+anyhow = "1.0.86"
 binary-reader = "0.4.5"
 bitflags = "2.4.2"
 cbc = "0.1.2"
 eframe = "0.26.2"
+egui-modal = "=0.3.5"
 egui-phosphor = { version = "0.4.0", features = ["regular", "fill"] }
 egui_extras = "0.26.2"
 encoding_rs = "0.8.33"

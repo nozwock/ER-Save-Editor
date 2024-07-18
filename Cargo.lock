@@ -240,9 +240,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.81"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
+checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
 name = "arbitrary"
@@ -1195,6 +1195,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-modal"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c42ec236ee84cdf0f2119c554291684d51ce829f2949c44159b0c9d685834117"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui-phosphor"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1396,10 +1405,12 @@ name = "er-save-editor"
 version = "0.0.22"
 dependencies = [
  "aes",
+ "anyhow",
  "binary-reader",
  "bitflags 2.4.2",
  "cbc",
  "eframe",
+ "egui-modal",
  "egui-phosphor",
  "egui_extras",
  "encoding_rs",
