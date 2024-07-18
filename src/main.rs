@@ -12,7 +12,7 @@ use std::{fs::File, io::Write, path::PathBuf};
 use eframe::{egui::{self, text::LayoutJob, Align, FontSelection, Id, LayerId, Layout, Order, RichText, Rounding, Style}, epaint::Color32};
 use rfd::FileDialog;
 use save::save::save::{Save, SaveType};
-use ui::{equipment::equipment::equipment, events::events::events, general::general::general, importer::import::character_importer, inventory::inventory::inventory::inventory, menu::menu::{menu, Route}, none::none::none, regions::regions::regions, stats::stats::stats};
+use ui::{dialog::show_err, equipment::equipment::equipment, events::events::events, general::general::general, importer::import::character_importer, inventory::inventory::inventory::inventory, menu::menu::{menu, Route}, none::none::none, regions::regions::regions, stats::stats::stats};
 use vm::{importer::general_view_model::ImporterViewModel, vm::vm::ViewModel};
 use crate::write::write::Write as w; 
 use rust_embed::RustEmbed;
@@ -76,10 +76,12 @@ impl App {
         }
     }
 
-    fn open(&mut self, path: PathBuf) {
-        self.save = Save::from_path(&path).expect("Failed to read save");
+    fn open(&mut self, path: PathBuf) -> anyhow::Result<()> {
+        self.save = Save::from_path(&path)?;
         self.vm = ViewModel::from_save(&self.save);
         self.picked_path = path.clone();
+
+        Ok(())
     }
 
     fn save(&mut self, path: PathBuf) {
@@ -117,15 +119,18 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.set_zoom_factor(1.75);
+
+        let mut modal = egui_modal::Modal::new(ctx, "modal");
+        modal.show_dialog();
+
         // TOP PANEL
         egui::TopBottomPanel::top("toolbar").default_height(35.).show(ctx, |ui| {
             ui.columns(2, |uis|{
                 uis[0].with_layout(Layout::left_to_right(Align::Center),| ui| {
                     if ui.button(egui::RichText::new(format!("{} open", egui_phosphor::regular::FOLDER_OPEN))).clicked() {
                         let files = Self::open_file_dialog();
-                        match files {
-                            Some(path) => self.open(path),
-                            None => {},
+                        if let Some(path) = files {
+                            show_err(&modal, self.open(path));
                         }
                     }
                     if ui.button(egui::RichText::new(format!("{} save", egui_phosphor::regular::FLOPPY_DISK))).clicked() {
@@ -256,21 +261,21 @@ impl eframe::App for App {
                 let path = ctx.input(|i| {
                     if !i.raw.hovered_files.is_empty() {
                         let file = i.raw.hovered_files[0].clone();
-                        let path: std::path::PathBuf = file.path.expect("Error!");
-                        return path.into_os_string().into_string().expect("");
+                        let path = file.path.expect("path shouldn't be None");
+                        return Some(path);
                     }
-                    "".to_string()
+                    None
                 }); 
                 
                 // Display indicator of hovering file
                 ui.centered_and_justified(|ui| {
-                    if !path.is_empty() {
+                    if let Some(path) = path {
                         let painter =
                             ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
                 
                         let screen_rect = ctx.screen_rect();
                         painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(96));
-                        ui.label(egui::RichText::new(path));
+                        ui.label(egui::RichText::new(path.to_string_lossy()));
                     }
                     else {
                         let style = Style::default();
@@ -300,8 +305,9 @@ impl eframe::App for App {
                 ctx.input(|i| {
                     if !i.raw.dropped_files.is_empty() {
                         let file = i.raw.dropped_files[0].clone();
-                        let path: std::path::PathBuf = file.path.expect("Error!");
-                        self.open(path);
+                        let path = file.path.expect("path shouldn't be None");
+
+                        show_err(&modal, self.open(path));
                     }
                 });
             });

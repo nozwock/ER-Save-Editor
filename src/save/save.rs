@@ -772,14 +772,14 @@ pub mod save {
         fn read(br: &mut BinaryReader) -> Result<Self, io::Error> {
             let mut save = Save::default();
 
-            if Self::is_pc(br) {
+            if Self::is_pc(br).unwrap_or_default() {
                 save.save_type = SaveType::PC(PCSave::read(br)?);
             }
-            else if Self::is_ps_save_wizard(br) {
+            else if Self::is_ps_save_wizard(br).unwrap_or_default() {
                 save.save_type = SaveType::PlayStation(PSSave::read(br)?);
             }
             else {
-                return Err( std::io::Error::new(io::ErrorKind::InvalidData, "Invalid data!") );
+                return Err(std::io::Error::new(io::ErrorKind::InvalidData, "Invalid savedata"));
             }
             
             Ok(save)
@@ -798,39 +798,37 @@ pub mod save {
     }
 
     impl Save {
-        pub fn from_path(path: &PathBuf) -> Result<Save, io::Error> {
-            let contents = fs::read(path).expect("Should have been able to read the file");
+        pub fn from_path(path: &PathBuf) -> anyhow::Result<Save> {
+            let contents = fs::read(path)?;
             let mut br = BinaryReader::from_u8(&contents);
             br.set_endian(binary_reader::Endian::Little);
 
-            // Check if it's an actual save file
-            assert!(Self::is(&mut br));
-
-            Self::read(&mut br)
+            Ok(Self::read(&mut br)?)
         }
 
         // Check if it's a save file
-        pub fn is(br: &mut BinaryReader) -> bool {
-            let is = Self::is_pc(br) || Self::is_ps_save_wizard(br);
-            is
+        pub fn is(br: &mut BinaryReader) -> anyhow::Result<bool> {
+            Ok(Self::is_pc(br)? || Self::is_ps_save_wizard(br)?)
         }
 
         // Check if it's a PC save file
-        pub fn is_pc(br: &mut BinaryReader) -> bool {
-            let magic = br.read_bytes(4).expect("");
+        pub fn is_pc(br: &mut BinaryReader) -> anyhow::Result<bool> {
+            let magic = br.read_bytes(4)?;
             let is_pc = magic == [66, 78, 68, 52];
             br.jmp(0);
-            is_pc
+
+            Ok(is_pc)
         }
 
         // Check if it's a PS Save Wizard save file
-        pub fn is_ps_save_wizard(br: &mut BinaryReader) -> bool {
+        pub fn is_ps_save_wizard(br: &mut BinaryReader) -> anyhow::Result<bool> {
             br.jmp(0x1960070);
-            let regulation = br.read_bytes(0x240010).expect("");
+            let regulation = br.read_bytes(0x240010)?;
             let digest = md5::compute(regulation);
             let is_ps_save_wizard = digest == md5::Digest(REGULATION_MD5_CHECKSUM);
             br.jmp(0);
-            is_ps_save_wizard
+
+            Ok(is_ps_save_wizard)
         }
     }
     
