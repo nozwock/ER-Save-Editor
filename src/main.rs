@@ -84,16 +84,13 @@ impl App {
         Ok(())
     }
 
-    fn save(&mut self, path: PathBuf) {
+    fn save(&mut self, path: PathBuf) -> anyhow::Result<()> {
         self.vm.update_save(&mut self.save.save_type);
-        let mut f = File::create(path).expect("");
-        let bytes = self.save.write().expect("");
-        let res = f.write_all(&bytes);
 
-        match res {
-            Ok(_) => {},
-            Err(_) => todo!(),
-        }
+        let mut f = File::create(path)?;
+        f.write_all(&self.save.write()?)?;
+
+        Ok(())
     }
 
     fn open_file_dialog() -> Option<PathBuf> {
@@ -128,16 +125,13 @@ impl eframe::App for App {
             ui.columns(2, |uis|{
                 uis[0].with_layout(Layout::left_to_right(Align::Center),| ui| {
                     if ui.button(egui::RichText::new(format!("{} open", egui_phosphor::regular::FOLDER_OPEN))).clicked() {
-                        let files = Self::open_file_dialog();
-                        if let Some(path) = files {
+                        if let Some(path) = Self::open_file_dialog() {
                             show_err(&modal, self.open(path));
                         }
                     }
                     if ui.button(egui::RichText::new(format!("{} save", egui_phosphor::regular::FLOPPY_DISK))).clicked() {
-                        let files = Self::save_file_dialog();
-                        match files {
-                            Some(path) => self.save(path),
-                            None => {},
+                        if let Some(path) = Self::save_file_dialog() {
+                            show_err(&modal, self.save(path));
                         }
                     }
                 });
