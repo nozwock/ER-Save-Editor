@@ -78,7 +78,7 @@ impl App {
 
     fn open(&mut self, path: PathBuf) -> anyhow::Result<()> {
         self.save = Save::from_path(&path)?;
-        self.vm = ViewModel::from_save(&self.save);
+        self.vm = ViewModel::from_save(&self.save)?;
         self.picked_path = path.clone();
 
         Ok(())

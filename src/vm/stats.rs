@@ -1,4 +1,6 @@
 pub mod stats_view_model {
+    use anyhow::anyhow;
+
     use crate::{db::classes::classes::ArcheType, save::common::save_slot::SaveSlot};
 
     #[derive(Clone)]
@@ -37,8 +39,9 @@ pub mod stats_view_model {
     }
 
     impl StatsViewModel {
-        pub fn from_save(slot:& SaveSlot) -> Self {
-            let arche_type = ArcheType::try_from(slot.player_game_data.arche_type).expect("");
+        pub fn from_save(slot:& SaveSlot) -> anyhow::Result<Self> {
+            let arche_type = ArcheType::try_from(slot.player_game_data.arche_type)
+                .map_err(|_| anyhow!("Invalid ArcheType"))?;
             let vigor = slot.player_game_data.vigor;
             let mind = slot.player_game_data.mind;
             let endurance = slot.player_game_data.endurance;
@@ -51,20 +54,22 @@ pub mod stats_view_model {
             let souls = slot.player_game_data.souls;
             let soulsmemory = slot.player_game_data.soulsmemory;
 
-            Self {
-                arche_type,
-                vigor,
-                mind,
-                endurance,
-                strength,
-                dexterity,
-                intelligence,
-                faith,
-                arcane,
-                level,
-                souls,
-                soulsmemory
-            }
+            Ok(
+                Self {
+                    arche_type,
+                    vigor,
+                    mind,
+                    endurance,
+                    strength,
+                    dexterity,
+                    intelligence,
+                    faith,
+                    arcane,
+                    level,
+                    souls,
+                    soulsmemory
+                }
+            )
         }
     }
 }

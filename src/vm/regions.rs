@@ -11,13 +11,20 @@ pub mod regions_view_model {
 
     impl Default for RegionsViewModel {
         fn default() -> Self {
-            let mut region_groups: BTreeMap<MapName, Vec<Region>> = REGIONS.lock().unwrap().iter().map(|r| (r.1.2, Vec::new())).collect();
+            let mut region_groups: BTreeMap<MapName, Vec<Region>> = REGIONS
+                .lock()
+                .expect("Lock shouldn't be poisoned")
+                .iter()
+                .map(|r| (r.1.2, Vec::new()))
+                .collect();
             let mut regions: BTreeMap<Region, (bool, bool, bool, bool)> = BTreeMap::new();
 
-            for (region, (_,_, map, is_open_world, is_dungeon, is_boss)) in REGIONS.lock().unwrap().iter() {
+            for (region, (_,_, map, is_open_world, is_dungeon, is_boss)) in REGIONS.lock().expect("Lock shouldn't be poisoned").iter() {
                 regions.insert(*region, (false, *is_open_world, *is_dungeon, *is_boss));
-                region_groups.get_mut(&map).expect("").push(*region);
-                region_groups.get_mut(&map).expect("").sort();
+                if let Some(it) = region_groups.get_mut(&map) {
+                    it.push(*region);
+                    it.sort();
+                }
             }
 
             Self { region_groups, regions }
@@ -30,11 +37,13 @@ pub mod regions_view_model {
 
             for i in 0..slot.regions.unlocked_regions_count {
                 let key = &slot.regions.unlocked_regions[i as usize];
-                let is_invadeable_region = ID_TO_REGION.lock().unwrap().contains_key(key);
+                let is_invadeable_region = ID_TO_REGION.lock().expect("Lock shouldn't be poisoned").contains_key(key);
                 
                 if is_invadeable_region {
-                    let region = ID_TO_REGION.lock().unwrap()[key];
-                    regions_vm.regions.get_mut(&region).expect("").0 = true;
+                    let region = ID_TO_REGION.lock().expect("Lock shouldn't be poisoned")[key];
+                    if let Some(it) = regions_vm.regions.get_mut(&region) {
+                        it.0 = true;
+                    }
                 }
             }
 

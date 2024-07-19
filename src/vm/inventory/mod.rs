@@ -124,42 +124,76 @@ impl InventoryItemViewModel {
             InventoryGaitemType::WEAPON => {
                 let id = (gaitem.item_id / 100)*100;
                 let upgrade_level = gaitem.item_id % 100;
-                (gaitem.item_id, match WEAPON_NAME.lock().unwrap().get(&id) {
-                    Some(name) => if !name.is_empty() {
-                        if upgrade_level > 0 {format!("{} +{}", name, upgrade_level)} else {name.to_string()}
-                    } else {format!("[UNKOWN_{}]", id)},
-                    None => format!("[UNKOWN_{}]", id),
-                })
+                (
+                    gaitem.item_id,
+                    WEAPON_NAME
+                        .lock()
+                        .expect("Lock shouldn't be poisoned")
+                        .get(&id)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| {
+                            if upgrade_level > 0 {
+                                format!("{} +{}", s, upgrade_level)
+                            } else {
+                                s.to_string()
+                            }
+                        })
+                        .unwrap_or_else(|| format!("[UNKNOWN_{}]", id))
+                )
             },
             InventoryGaitemType::ARMOR => {
                 let id = gaitem.item_id ^ InventoryItemType::ARMOR as u32;
-                (id, match ARMOR_NAME.lock().unwrap().get(&id) {
-                    Some(name) => if !name.is_empty() {name.to_string()} else {format!("[UNKOWN_{}]", id)},
-                    None => format!("[UNKOWN_{}]", id),
-                })
+                (
+                    id,
+                    ARMOR_NAME
+                        .lock()
+                        .expect("Lock shouldn't be poisoned")
+                        .get(&id)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| format!("[UNKNOWN_{}]", id))
+                )
             },
             InventoryGaitemType::ACCESSORY => {
                 let id = gaitem_handle ^ InventoryGaitemType::ACCESSORY as u32;
-                (id, match ACCESSORY_NAME.lock().unwrap().get(&id) {
-                    Some(name) => if !name.is_empty() {name.to_string()} else {format!("[UNKOWN_{}]", id)},
-                    None => format!("[UNKOWN_{}]", id),
-                })
+                (
+                    id,
+                    ACCESSORY_NAME
+                        .lock()
+                        .expect("Lock shouldn't be poisoned")
+                        .get(&id)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| format!("[UNKNOWN_{}]", id))
+                )
             },
             InventoryGaitemType::ITEM => {
                 let id = gaitem_handle ^ InventoryGaitemType::ITEM as u32;
-                (id, match ITEM_NAME.lock().unwrap().get(&id) {
-                    Some(name) => if !name.is_empty() {name.to_string()} else {format!("[UNKOWN_{}]", id)},
-                    None => format!("[UNKOWN_{}]", id),
-                })
+                (
+                    id,
+                    ITEM_NAME
+                        .lock()
+                        .expect("Lock shouldn't be poisoned")
+                        .get(&id)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| format!("[UNKNOWN_{}]", id))
+                )
             },
             InventoryGaitemType::AOW => {
                 let id = gaitem.item_id ^ InventoryItemType::AOW as u32;
-                (id, match AOW_NAME.lock().unwrap().get(&id) {
-                    Some(name) => if !name.is_empty() {name.to_string()} else {format!("[UNKOWN_{}]", id)},
-                    None => format!("[UNKOWN_{}]", id),
-                })
+                (
+                    id,
+                    AOW_NAME
+                        .lock()
+                        .expect("Lock shouldn't be poisoned")
+                        .get(&id)
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| format!("[UNKNOWN_{}]", id))
+                )
             },
-            InventoryGaitemType::EMPTY => panic!("We shouldn't reach this!"),
+            InventoryGaitemType::EMPTY => unreachable!(),
         };            
 
         Self {
@@ -287,7 +321,7 @@ impl InventoryViewModel {
 
             match inventory_gaitem_type {
                 InventoryGaitemType::WEAPON => {
-                    let gaitem = self.gaitem_map.iter().find(|gaitem| gaitem.gaitem_handle == item.ga_item_handle).unwrap();
+                    let gaitem = self.gaitem_map.iter().find(|gaitem| gaitem.gaitem_handle == item.ga_item_handle).unwrap(); // note: Leaving unwrap as is for now
                     let inventory_item_vm = InventoryItemViewModel::from_save(&item, equip_index, &gaitem, InventoryGaitemType::WEAPON);
                     if inventory_item_vm.item_id == 110000 && self.unarmed.item_id != 110000 {self.unarmed = inventory_item_vm.clone();}
                     inventory_storage.common_items.push(inventory_item_vm.clone());

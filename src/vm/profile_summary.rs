@@ -23,7 +23,7 @@ pub mod slot_view_model {
             
             // Character Name
             let character_name = profile_summary.character_name;
-            let character_name = String::from_utf16(&character_name).expect("");
+            let character_name = String::from_utf16_lossy(&character_name);
              
             Self {
                 active,

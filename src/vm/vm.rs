@@ -57,15 +57,17 @@ pub mod vm {
     }
 
     impl ViewModel {
-        pub fn from_save(save: &Save) -> Self {
+        pub fn from_save(save: &Save) -> anyhow::Result<Self> {
             let mut vm = ViewModel::default();
 
             // Init params
-            Regulation::init_params(save).unwrap(); // note: Unsure what to do here
+            Regulation::init_params(save)?;
 
             // Check for irregular data
             vm.active = Some(Validator::validate(save));
-            if vm.active.is_some_and(|v| !v) {return vm;}
+            if vm.active.is_some_and(|v| !v) {
+                return Ok(vm);
+            }
 
             // Steam Id
             vm.steam_id = save.save_type.get_global_steam_id().to_string();
@@ -77,15 +79,15 @@ pub mod vm {
             for (index, active) in save.save_type.active_slots().iter().enumerate() {
                 if *active {
                     vm.profile_summary[index] = ProfileSummaryViewModel::from_save(&save.save_type.get_profile_summary(index));
-                    vm.slots[index] = SlotViewModel::from_save(&save.save_type.get_slot(index));
+                    vm.slots[index] = SlotViewModel::from_save(&save.save_type.get_slot(index))?;
                 }
             }
 
-            vm
+            Ok(vm)
         }
 
         pub fn update_save(&self,  save_type: &mut SaveType) {
-            let steam_id = self.steam_id.parse::<u64>().expect("");
+            let steam_id = self.steam_id.parse::<u64>().expect("SteamID should be a number");
             // Update SteamID for UserData10
             save_type.set_global_steam_id(steam_id);
 
@@ -317,57 +319,57 @@ pub mod vm {
         fn update_events(&self, save_type: &mut SaveType, index: usize) {
             
             for (grace, on) in self.slots[index].events_vm.graces.iter() {
-                let grace_info = GRACES.lock().unwrap()[&grace];
-                let offset = EVENT_FLAGS.lock().unwrap()[&grace_info.1];
+                let grace_info = GRACES.lock().expect("Lock shouldn't be poisoned")[&grace];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&grace_info.1];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
 
             // Whetblades
             for (whetblade, on) in self.slots[index].events_vm.whetblades.iter() {
-                let whetblade_info = WHETBLADES.lock().unwrap()[&whetblade];
-                let offset = EVENT_FLAGS.lock().unwrap()[&whetblade_info.0];
+                let whetblade_info = WHETBLADES.lock().expect("Lock shouldn't be poisoned")[&whetblade];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&whetblade_info.0];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
 
             // Cookbooks
             for (cookbook, on) in self.slots[index].events_vm.cookbooks.iter() {
-                let cookbook_info = COOKBOKS.lock().unwrap()[&cookbook];
-                let offset = EVENT_FLAGS.lock().unwrap()[&cookbook_info.0];
+                let cookbook_info = COOKBOKS.lock().expect("Lock shouldn't be poisoned")[&cookbook];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&cookbook_info.0];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
 
             // Maps
             for (map, on) in self.slots[index].events_vm.maps.iter() {
-                let map_info = MAPS.lock().unwrap()[&map];
-                let offset = EVENT_FLAGS.lock().unwrap()[&map_info.0];
+                let map_info = MAPS.lock().expect("Lock shouldn't be poisoned")[&map];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&map_info.0];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
 
             // Bosses
             for (boss, on) in self.slots[index].events_vm.bosses.iter() {
-                let boss_info = BOSSES.lock().unwrap()[&boss];
-                let offset = EVENT_FLAGS.lock().unwrap()[&boss_info.0];
+                let boss_info = BOSSES.lock().expect("Lock shouldn't be poisoned")[&boss];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&boss_info.0];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
 
             // Summoning Pools
             for (summoning_pool, on) in self.slots[index].events_vm.summoning_pools.iter() {
-                let summoning_pool_info = SUMMONING_POOLS.lock().unwrap()[&summoning_pool];
-                let offset = EVENT_FLAGS.lock().unwrap()[&summoning_pool_info.0];
+                let summoning_pool_info = SUMMONING_POOLS.lock().expect("Lock shouldn't be poisoned")[&summoning_pool];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&summoning_pool_info.0];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
 
             // Colosseums
             for (colusseum, on) in self.slots[index].events_vm.colosseums.iter() {
-                let colusseum_info = COLOSSEUMS.lock().unwrap()[&colusseum];
-                let offset = EVENT_FLAGS.lock().unwrap()[&colusseum_info.0];
+                let colusseum_info = COLOSSEUMS.lock().expect("Lock shouldn't be poisoned")[&colusseum];
+                let offset = EVENT_FLAGS.lock().expect("Lock shouldn't be poisoned")[&colusseum_info.0];
                 save_type.set_character_event_flag(index, offset.0 as usize, offset.1, *on);
             }
         }
 
         fn update_regions(&self, save_type: &mut SaveType, index: usize) {
             for (region, (activated, _, _,_)) in self.slots[index].regions_vm.regions.iter() {
-                let region_id = REGIONS.lock().unwrap()[region].0;
+                let region_id = REGIONS.lock().expect("Lock shouldn't be poisoned")[region].0;
                 if *activated {
                     save_type.add_region(index, region_id);
                 }

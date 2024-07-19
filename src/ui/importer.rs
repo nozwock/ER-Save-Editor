@@ -31,7 +31,7 @@ pub mod import {
                 ui.add_space(5.);
                 ui.vertical_centered_justified(|ui|{
                     if ui.add_sized([ui.available_width(), 40.], egui::widgets::Button::new("Import")).clicked() {
-                        importer_vm.import_character(to_save, vm);
+                        importer_vm.import_character(to_save, vm).unwrap();
                     }
                 });
             }

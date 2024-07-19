@@ -1,4 +1,6 @@
 use std::cmp::min;
+use anyhow::bail;
+
 use crate::{ 
     db::{
         accessory_name::accessory_name::ACCESSORY_NAME, aow_name::aow_name::AOW_NAME, armor_name::armor_name::ARMOR_NAME, item_name::item_name::ITEM_NAME, items::items, weapon_name::weapon_name::WEAPON_NAME
@@ -32,21 +34,22 @@ impl InventoryViewModel {
             InventoryItemType::WEAPON => {
                 // Fetch weapon param to look up weapon type
                 let weapon_param = Regulation::equip_weapon_params_map().get(&item.id);
-                if weapon_param.is_none() {
+
+                let Some(weapon_param) = weapon_param else {
                     self.log.insert(0, format!("Failed! Couldn't find weapon {}|{:#x} in weapon params.", item.id, item.id));
                     return;
-                }
+                };
 
                 // Retrieve weapon type and check if weapon type is projectile, default to regular weapon
-                let wep_type = WepType::from(weapon_param.unwrap().data.wepType);
+                let wep_type = WepType::from(weapon_param.data.wepType);
                 if wep_type == WepType::Arrow || wep_type == WepType::Greatarrow || wep_type == WepType::Bolt || wep_type == WepType::BallistaBolt  {
-                    if item.quantity.is_none() {
+                    let Some(quantity) = item.quantity else {
                         self.log.insert(0, format!("Failed! Quantity is 'None'."));
                         return;
-                    }
+                    };
 
                     // Add projectile
-                    self.add_projectile(item.id, item.quantity.unwrap() as u32);
+                    self.add_projectile(item.id, quantity as u32);
 
                 }
                 else {
@@ -85,8 +88,7 @@ impl InventoryViewModel {
     fn add_weapon(&mut self, id: u32, gem: Option<u32>, upgrade: Option<i16>, affinity: Option<i16>) {
         // If weapon has ash of war then handle adding the ash of war to the inventory
         let mut gem_gaitem_handle = u32::MAX;
-        if gem.is_some() {
-            let gem_id = gem.unwrap();
+        if let Some(gem_id) = gem {
             match Regulation::equip_gem_param_map().get(&gem_id) {
                 Some(gem_param) => { 
                     gem_gaitem_handle = self.add_aow(gem_param.id);
@@ -98,16 +100,10 @@ impl InventoryViewModel {
         }
 
         // Check for upgrade
-        let upgrade_level: u32 = match upgrade {
-            Some(upgrade_level) => upgrade_level as u32,
-            None => 0,
-        };
+        let upgrade_level = upgrade.unwrap_or_default() as u32;
 
         // Check for affinity
-        let affinity_id = match affinity {
-            Some(affinity_id) => affinity_id as u32,
-            None => 0,
-        };
+        let affinity_id = affinity.unwrap_or_default() as u32;
 
         // Construct an item_id by combining the different configuration to the weapon
         // Weapon Id + Affinty Id + Upgrade level
@@ -124,13 +120,22 @@ impl InventoryViewModel {
         
         // Try to fetch weapon name from WEAPON_NAME db in order to include infusion in the name,
         // fallback to weapon name from regulation
-        let weapon_name = match WEAPON_NAME.lock().unwrap().get(&((item_id/100)*100)) {
-            Some(name) => if upgrade_level > 0 {format!("{} +{}", name, upgrade_level)} else {name.to_string()}
-            None => {
-                self.log.insert(0, format!("Failed to find name for weapon with id {}|{:#x}", ((item_id/100)*100), ((item_id/100)*100)));
-                format!("Failed to find name for weapon with id {}|{:#x}", ((item_id/100)*100), ((item_id/100)*100))
-            },
-        };
+        let id = item_id / 100 * 100;
+        let weapon_name = WEAPON_NAME
+            .lock()
+            .expect("Lock shouldn't be poisoned")
+            .get(&id)
+            .map(|s| {
+                if upgrade_level > 0 {
+                    format!("{} +{}", s, upgrade_level)
+                } else {
+                    s.to_string()
+                }
+            })
+            .unwrap_or_else(|| {
+                self.log.insert(0, format!("Failed to find name for weapon with id {}|{:#x}", id, id));
+                format!("[UNKNOWN_{}]", id)
+            });
 
         // Add item to storage
         self.add_to_storage_common_items(gaitem_handle, item_id, 1, 0, weapon_name.to_string(), InventoryGaitemType::WEAPON);
@@ -149,9 +154,8 @@ impl InventoryViewModel {
         let max_in_storage;
         
         // Look up projectile in params
-        let weapon_params_res = Regulation::equip_weapon_params_map().get(&id);
-        if weapon_params_res.is_some() {
-            let weapon_params = weapon_params_res.unwrap();
+        let weapon_params = Regulation::equip_weapon_params_map().get(&id);
+        if let Some(weapon_params) = weapon_params {
             max_held = weapon_params.data.maxArrowQuantity as u32;
             max_in_storage = 600;
         }
@@ -162,13 +166,15 @@ impl InventoryViewModel {
         }
 
         // Fetch name
-        let name = match WEAPON_NAME.lock().unwrap().get(&id) {
-            Some(name) => format!("{}",name),            
-            None => {
+        let name = WEAPON_NAME
+            .lock()
+            .expect("Lock shouldn't be poisoned")
+            .get(&id)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
                 self.log.insert(0, format!("Failed to find name for item projectile id {}|{:#x}", id, id));
-                format!("Failed to find name for projectile with id {}|{:#x}", id, id)
-            },
-        };
+                format!("[UNKNOWN_{}]", id)
+            });
 
         // Search for item in held inventory, retrieve position if found
         let held_index_res = self.storage[0].common_items.iter().position(|i| i.item_id == id);
@@ -180,13 +186,9 @@ impl InventoryViewModel {
         // rest of the quantity is transferred over to storage quantity
         quantity - ( if is_already_held {
             // Calculate allowed remaining quantity in held inventory
-            let free_space = match self.get_free_space_for_item_quantity_in_storage(id,  0, true, false) {
-                Ok(val) => val,
-                Err(err) => {
-                    println!("{err}");
-                    0
-                },
-            };
+            let free_space = self.get_free_space_for_item_quantity_in_storage(id,  0, true, false)
+                .inspect_err(|e| eprintln!("{e}"))
+                .unwrap_or_default();
             
             // If quantity exceedes the free space amount then use max_held instead 
             let amount = min(quantity, free_space);
@@ -230,13 +232,9 @@ impl InventoryViewModel {
             // If quantity exceedes the maximum storage amount then use max_in_storage instead 
             if is_already_in_box {
                 // Calculate allowed remaining quantity in held inventory
-                let free_space = match self.get_free_space_for_item_quantity_in_storage(id,  1, true, false) {
-                    Ok(val) => val,
-                    Err(err) => {
-                        println!("{err}");
-                        0
-                    },
-                };
+                let free_space = self.get_free_space_for_item_quantity_in_storage(id,  1, true, false)
+                    .inspect_err(|e| eprintln!("{e}"))
+                    .unwrap_or_default();
                 
                 // If quantity exceedes the free space amount then use max_held instead 
                 let amount = min(quantity, free_space);
@@ -282,7 +280,7 @@ impl InventoryViewModel {
         let max_in_storage;
 
         // Fetch name
-        let name = match ITEM_NAME.lock().unwrap().get(&id) {
+        let name = match ITEM_NAME.lock().expect("Lock shouldn't be poisoned").get(&id) {
             Some(name) => format!("{}",name),            
             None => {
                 self.log.insert(0, format!("Failed to find name for item with id {}|{:#x}", item_id, item_id));
@@ -290,9 +288,8 @@ impl InventoryViewModel {
             },
         };
 
-        let item_params_res = Regulation::equip_goods_param_map().get(&id);
-        if item_params_res.is_some() {
-            let item_params = item_params_res.unwrap();
+        let item_params = Regulation::equip_goods_param_map().get(&id);
+        if let Some(item_params) = item_params {
             max_held = item_params.data.maxNum as u32;
             max_in_storage = item_params.data.maxRepositoryNum as u32;
         }
@@ -305,8 +302,8 @@ impl InventoryViewModel {
         // Check if item needs to go straight to storage. In the case of pots, it's easiest to only,
         // limit them to storage to avoid having more pots held than allowed in game.
         // Not the best implementation, but then again none of this code is.
-        let straight_to_storage = items().get("Pots").unwrap().iter().any(|id| *id == item_id) ||
-                                    items().get("Perfumes").unwrap().iter().any(|id| *id == item_id );
+        let straight_to_storage = items().get("Pots").expect("Pots should be in the save").iter().any(|id| *id == item_id) ||
+                                    items().get("Perfumes").expect("Perfumes should be in the save").iter().any(|id| *id == item_id );
 
         // Search for item in held inventory, retrieve position if found
         let held_index_res = self.storage[0].common_items.iter().position(|i| i.ga_item_handle == gaitem_handle);
@@ -318,13 +315,9 @@ impl InventoryViewModel {
             // rest of the quantity is transferred over to storage quantity
                 quantity - ( if is_already_held {
                     // Calculate allowed remaining quantity in held inventory
-                    let free_space = match self.get_free_space_for_item_quantity_in_storage(id, 0, false, false) {
-                        Ok(val) => val,
-                        Err(err) => {
-                            println!("{err}");
-                            0
-                        },
-                    };
+                    let free_space = self.get_free_space_for_item_quantity_in_storage(id, 0, false, false)
+                        .inspect_err(|e| eprintln!("{e}"))
+                        .unwrap_or_default();
 
                     // If quantity exceedes the free space amount then use max_held instead 
                     let amount = min(quantity, free_space);
@@ -363,13 +356,9 @@ impl InventoryViewModel {
 
             if is_already_in_box {
                 // Calculate allowed remaining quantity in held inventory
-                let free_space = match self.get_free_space_for_item_quantity_in_storage(id, 1, false, false) {
-                    Ok(val) => val,
-                    Err(err) => {
-                        println!("{err}");
-                        0
-                    },
-                };
+                let free_space = self.get_free_space_for_item_quantity_in_storage(id, 1, false, false)
+                .inspect_err(|e| eprintln!("{e}"))
+                .unwrap_or_default();
                 
                 // If quantity exceedes the free space amount then use max_held instead 
                 let amount = min(quantity, free_space);
@@ -403,17 +392,18 @@ impl InventoryViewModel {
         let max_in_storage;
 
         // Fetch name
-        let name = match ITEM_NAME.lock().unwrap().get(&id) {
-            Some(name) => format!("{}",name),            
-            None => {
+        let name = ITEM_NAME
+            .lock()
+            .expect("Lock shouldn't be poisoned")
+            .get(&id)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
                 self.log.insert(0, format!("Failed to find name for item with id {}|{:#x}", item_id, item_id));
-                format!("Failed to find name for item with id {}|{:#x}", item_id, item_id)
-            },
-        };
+                format!("[UNKNOWN_{}]", item_id)
+            });
 
-        let item_params_res = Regulation::equip_goods_param_map().get(&id);
-        if item_params_res.is_some() {
-            let item_params = item_params_res.unwrap();
+        let item_params = Regulation::equip_goods_param_map().get(&id);
+        if let Some(item_params) = item_params {
             max_held = item_params.data.maxNum as u32;
             max_in_storage = item_params.data.maxRepositoryNum as u32;
         }
@@ -433,13 +423,9 @@ impl InventoryViewModel {
         // rest of the quantity is transferred over to storage quantity
             quantity - ( if is_already_held {
                 // Calculate allowed remaining quantity in held inventory
-                let free_space = match self.get_free_space_for_item_quantity_in_storage(id, 0, false, true) {
-                    Ok(val) => val,
-                    Err(err) => {
-                        println!("{err}");
-                        0
-                    },
-                };
+                let free_space = self.get_free_space_for_item_quantity_in_storage(id, 0, false, true)
+                    .inspect_err(|e| eprintln!("{e}"))
+                    .unwrap_or_default();
 
                 // If quantity exceedes the free space amount then use max_held instead 
                 let amount = min(quantity, free_space);
@@ -476,13 +462,9 @@ impl InventoryViewModel {
             // If quantity exceedes the maximum storage amount then use max_in_storage instead 
             if is_already_in_box {
                 // Calculate allowed remaining quantity in held inventory
-                let free_space = match self.get_free_space_for_item_quantity_in_storage(id, 1, false, true) {
-                    Ok(val) => val,
-                    Err(err) => {
-                        println!("{err}");
-                        0
-                    },
-                };
+                let free_space = self.get_free_space_for_item_quantity_in_storage(id, 1, false, true)
+                    .inspect_err(|e| eprintln!("{e}"))
+                    .unwrap_or_default();
 
                 // To ensure not to exceed storage item quantity limit
                 let amount = min(free_space, storage_quantity);
@@ -523,13 +505,15 @@ impl InventoryViewModel {
         }, true);
 
         // Fetch name
-        let name = match AOW_NAME.lock().unwrap().get(&id) {
-            Some(name) => format!("{}",name),            
-            None => {
+        let name = AOW_NAME
+            .lock()
+            .expect("Lock shouldn't be poisoned")
+            .get(&id)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
                 self.log.insert(0, format!("Failed to find name for item with id {}|{:#x}", item_id, item_id));
-                format!("Failed to find name for AOW with id {}|{:#x}", item_id, item_id)
-            },
-        };
+                format!("[UNKNOWN_{}]", item_id)
+            });
 
         // Add to common items
         self.add_to_storage_common_items(gaitem_handle, id, 1, 0, name.to_string(), InventoryGaitemType::AOW);
@@ -554,13 +538,15 @@ impl InventoryViewModel {
         }, false);
 
         // Fetch name
-        let name = match ARMOR_NAME.lock().unwrap().get(&id) {
-            Some(name) => format!("{}",name),            
-            None => {
+        let name = ARMOR_NAME
+            .lock()
+            .expect("Lock shouldn't be poisoned")
+            .get(&id)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
                 self.log.insert(0, format!("Failed to find name for item with id {}|{:#x}", item_id, item_id));
-                format!("Failed to find name for Armor with id {}|{:#x}", item_id, item_id)
-            },
-        };
+                format!("[UNKNOWN_{}]", item_id)
+            });
 
         self.add_to_storage_common_items(gaitem_handle, id, 1, 0, name.to_string(), InventoryGaitemType::ARMOR);
         
@@ -573,13 +559,15 @@ impl InventoryViewModel {
         let gaitem_handle = id | InventoryGaitemType::ACCESSORY as u32;
 
         // Fetch name
-        let name = match ACCESSORY_NAME.lock().unwrap().get(&id) {
-            Some(name) => format!("{}",name),            
-            None => {
+        let name = ACCESSORY_NAME
+            .lock()
+            .unwrap()
+            .get(&id)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
                 self.log.insert(0, format!("Failed to find name for item with id {}|{:#x}", item_id, item_id));
-                format!("Failed to find name for Talisman with id {}|{:#x}", item_id, item_id)
-            },
-        };
+                format!("[UNKNOWN_{}]", item_id)
+            });
 
         self.add_to_storage_common_items(gaitem_handle, id, 1, 0, name.to_string(), InventoryGaitemType::ACCESSORY);
 
@@ -703,7 +691,7 @@ impl InventoryViewModel {
         gaitem_handle
     }
 
-    fn get_free_space_for_item_quantity_in_storage(&mut self, id: u32, storage_index: usize, is_projectile: bool, is_key_item: bool) -> Result<u32, String>{
+    fn get_free_space_for_item_quantity_in_storage(&mut self, id: u32, storage_index: usize, is_projectile: bool, is_key_item: bool) -> anyhow::Result<u32>{
         // Gaitem handle for items created from item id, projectile must be looked up
         let gaitem_handle = if !is_projectile {
             id | InventoryGaitemType::ITEM as u32
@@ -714,13 +702,13 @@ impl InventoryViewModel {
             // Shouldn't happen. It's expected that there's at least one instance of 
             // the projectile in the gaitem map by this point
             if gaitem_map_res.is_empty() {
-                return Err(format!("Failed! Couldn't find projectile with {}|{:#x} in gaitem map.!", id, id));
+                bail!("Failed! Couldn't find projectile with {}|{:#x} in gaitem map.!", id, id);
             }
 
             // Storage box requires there to be a second entry the projectiles in the 
             // gaitem map
             if storage_index == 1 && gaitem_map_res.len() == 1 {
-                return Err(format!("Failed! Couldn't find projectile with {}|{:#x} in the storage box in gaitem map.!", id, id));
+                bail!("Failed! Couldn't find projectile with {}|{:#x} in the storage box in gaitem map.!", id, id);
             }
 
             let gaitem = gaitem_map_res[storage_index];
@@ -738,26 +726,24 @@ impl InventoryViewModel {
         }
         // Look up item param to fetch storage limits
         else {
-            let item_params_res = Regulation::equip_goods_param_map().get(&id);
-            if item_params_res.is_some() {
-                let item_params = item_params_res.unwrap();
+            let item_params = Regulation::equip_goods_param_map().get(&id);
+            if let Some(item_params) = item_params {
                 max[0] = item_params.data.maxNum as u32;
                 max[1] = item_params.data.maxRepositoryNum as u32;
             }
             else {
-                return Err(format!("Failed to determine storage limits for item {}|{:#x}. Add item failed!", id, id));
+                bail!("Failed to determine storage limits for item {}|{:#x}. Add item failed!", id, id);
             }
         }
 
         // Look up item in storage box
-        let item_res = match is_key_item {
+        let item = match is_key_item {
             true => self.storage[storage_index].key_items.iter().find(|i| i.ga_item_handle == gaitem_handle),
             false => self.storage[storage_index].common_items.iter().find(|i| i.ga_item_handle == gaitem_handle),
         };
 
-        if item_res.is_some() {
+        if let Some(item) = item {
             // Fetch item from item list 
-            let item = item_res.unwrap();
             let current_item_quantity = item.quantity;
 
             // Calculate how much free space for item is left in storage 
@@ -766,20 +752,17 @@ impl InventoryViewModel {
             return Ok(free_space);
         }
 
-
-        Err(format!("Failed to determine storage limits for item {}|{:#x}. Add item failed!", id, id))
+        bail!("Failed to determine storage limits for item {}|{:#x}. Add item failed!", id, id);
     }
     
     fn increase_item_quantity(&mut self, id: u32, amount: u32, storage_index: usize, is_key_item: bool) {
         // Look up item in storage box
-        let item_res = match is_key_item {
+        let item = match is_key_item {
             true => self.storage[storage_index].key_items.iter_mut().find(|i| i.item_id == id),
             false => self.storage[storage_index].common_items.iter_mut().find(|i| i.item_id == id),
         };
 
-        if item_res.is_some() {
-            let item = item_res.unwrap();
-
+        if let Some(item) = item {
             // Change item quantity
             item.quantity = item.quantity + amount;
         }

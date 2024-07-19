@@ -46,7 +46,7 @@ impl InventoryViewModel {
         }
     }
 
-    pub fn add_all_to_inventory(&mut self) {
+    pub fn add_all_to_inventory(&mut self) -> Option<()> {
         // Mark this section as changed so when the file is 
         // saved then it will write this section to the file
         self.changed = true;
@@ -58,7 +58,7 @@ impl InventoryViewModel {
                 for (index, _) in db::items::items().iter().enumerate() {
                     for (item_id, selected) in self.bulk_items_selected[index].iter_mut() {
                         if *selected {
-                            let item_param = Regulation::equip_goods_param_map().get(&(item_id^InventoryItemType::ITEM as u32)).unwrap();
+                            let item_param = Regulation::equip_goods_param_map().get(&(item_id^InventoryItemType::ITEM as u32))?;
 
                             let goods_type = GoodsType::from(item_param.data.goodsType);
                             let quantity = Some({
@@ -90,14 +90,15 @@ impl InventoryViewModel {
                 for (index, _) in weapons().iter().enumerate() {
                     for (weapon_id, selected) in self.bulk_items_selected[index].iter_mut() {
                         if *selected {
-                            let weapon_param = Regulation::equip_weapon_params_map().get(&weapon_id).unwrap();
+                            let weapon_param = Regulation::equip_weapon_params_map().get(&weapon_id)?;
 
                             let wep_type = WepType::from(weapon_param.data.wepType);
                             let is_projectile = wep_type == WepType::Arrow || wep_type == WepType::Greatarrow || wep_type == WepType::Bolt || wep_type == WepType::BallistaBolt;
                             let quantity = if is_projectile  {
                                 Some(self.bulk_items_arrow_quantity as i16)
-                            }
-                            else {None};
+                            } else {
+                                None
+                            };
 
                             let is_somber = weapon_param.data.reinforceTypeId != 0 && (
                                 weapon_param.data.reinforceTypeId % 2200 == 0 ||
@@ -131,7 +132,7 @@ impl InventoryViewModel {
                 for (index, _) in armor_sets().iter().enumerate() {
                     for (armor_id, selected) in self.bulk_items_selected[index].iter_mut() {
                         if *selected {
-                            let armor_param = Regulation::equip_protectors_param_map().get(&(armor_id^0x10000000)).unwrap();
+                            let armor_param = Regulation::equip_protectors_param_map().get(&(armor_id^0x10000000))?;
 
                             items.push(RegulationItemViewModel {
                                 id: armor_param.id,
@@ -149,7 +150,7 @@ impl InventoryViewModel {
                 for (index, _) in aows().iter().enumerate() {
                     for (aow_id, selected) in self.bulk_items_selected[index].iter_mut() {
                         if *selected {
-                            let aow_param = Regulation::equip_gem_param_map().get(&(aow_id^0x80000000)).unwrap();
+                            let aow_param = Regulation::equip_gem_param_map().get(&(aow_id^0x80000000))?;
 
                             items.push(RegulationItemViewModel {
                                 id: aow_param.id,
@@ -167,7 +168,7 @@ impl InventoryViewModel {
                 for (index, _) in talismans().iter().enumerate() {
                     for (talisman_id, selected) in self.bulk_items_selected[index].iter_mut() {
                         if *selected {
-                            let talisman_param = Regulation::equip_accessory_param_map().get(&(talisman_id^0x20000000)).unwrap();
+                            let talisman_param = Regulation::equip_accessory_param_map().get(&(talisman_id^0x20000000))?;
 
                             items.push(RegulationItemViewModel {
                                 id: talisman_param.id,
@@ -185,5 +186,7 @@ impl InventoryViewModel {
         for item in items {
             self.add_to_inventory(&item);
         }
+
+        Some(())
     }
 }

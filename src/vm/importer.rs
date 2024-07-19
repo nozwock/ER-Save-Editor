@@ -50,7 +50,7 @@ pub mod general_view_model {
                         if *char == 0 { break; }
                         character_name_trimmed[i] = *char;
                     }
-                    let character_name: String = String::from_utf16(&character_name_trimmed).expect("");
+                    let character_name = String::from_utf16_lossy(&character_name_trimmed);
                     importer_view_model.from_list[i].active = true;
                     importer_view_model.from_list[i].index = i;
                     importer_view_model.from_list[i].name = character_name;
@@ -68,8 +68,7 @@ pub mod general_view_model {
             importer_view_model
         }
 
-        pub fn import_character(&mut self, to_save: &mut Save, vm: &mut ViewModel) {
-
+        pub fn import_character(&mut self, to_save: &mut Save, vm: &mut ViewModel) -> anyhow::Result<()> {
             // Retain slot version
             let mut from_slot = self.from_save.save_type.get_slot(self.selected_from_index).clone();
             let to_slot = to_save.save_type.get_slot(self.selected_to_index);
@@ -82,7 +81,9 @@ pub mod general_view_model {
             to_save.save_type.set_profile_summary(self.selected_to_index, self.from_save.save_type.get_profile_summary(self.selected_from_index));
 
             // Refresh view model
-            vm.slots[self.selected_to_index] = SlotViewModel::from_save(to_save.save_type.get_slot(self.selected_to_index));
+            vm.slots[self.selected_to_index] = SlotViewModel::from_save(to_save.save_type.get_slot(self.selected_to_index))?;
+
+            Ok(())
         }
     }
 }

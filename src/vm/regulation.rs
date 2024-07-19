@@ -258,7 +258,7 @@ pub mod regulation_view_model {
     }
 
     impl RegulationViewModel {
-        pub fn update_available_infusions(&mut self){
+        pub fn update_available_infusions(&mut self) {
             self.selected_infusion = 0;
             self.available_infusions.clear();
             self.available_infusions.push(RegulationItemViewModel{
@@ -266,15 +266,16 @@ pub mod regulation_view_model {
                 name: "-".to_string(),
                 ..Default::default()
             });
-            if self.selected_item.wep_type.is_none() || !self.selected_item.infusable {
+
+            if !self.selected_item.infusable {
                 return;
             }
 
-            let wep_type = self.selected_item.wep_type.as_ref();
+            let Some(wep_type) = self.selected_item.wep_type.as_ref() else { return };
             self.available_infusions.extend(Regulation::equip_gem_param_map()
             .iter()
             .filter(|(_, gem)|{
-                match wep_type.unwrap() {
+                match wep_type {
                     WepType::Dagger => {
                         gem.data.canMountWep_Dagger()
                     },
@@ -404,9 +405,8 @@ pub mod regulation_view_model {
             if self.available_infusions.len() == 0 {
                 return;
             }
-            let res = Regulation::equip_gem_param_map().get(&self.available_infusions[self.selected_infusion].id);
-            if res.is_some() {
-                let gem = res.unwrap();
+            let gem = Regulation::equip_gem_param_map().get(&self.available_infusions[self.selected_infusion].id);
+            if let Some(gem) = gem {
                 if gem.data.configurableWepAttr00() {self.available_affinities.push(Affinity::Standard);}
                 if gem.data.configurableWepAttr01() {self.available_affinities.push(Affinity::Heavy);}
                 if gem.data.configurableWepAttr02() {self.available_affinities.push(Affinity::Keen);}

@@ -1,4 +1,6 @@
 pub mod general_view_model {
+    use anyhow::anyhow;
+
     use crate::save::common::save_slot::SaveSlot;
 
     #[derive(Default, Clone)]
@@ -41,7 +43,7 @@ pub mod general_view_model {
     }
 
     impl GeneralViewModel {
-        pub fn from_save(slot:& SaveSlot) -> Self {
+        pub fn from_save(slot:& SaveSlot) -> anyhow::Result<Self> {
 
             // Steam Id
             let steam_id = slot.steam_id.to_string();
@@ -50,23 +52,27 @@ pub mod general_view_model {
             let character_name = slot.player_game_data.character_name;
             let mut character_name_trimmed: [u16; 0x10] = [0;0x10];
             for (i, char) in character_name.iter().enumerate() {
-                if *char == 0 { break; }
+                if *char == 0 {
+                    break;
+                }
                 character_name_trimmed[i] = *char;
             }
-            let character_name = String::from_utf16(&character_name_trimmed).expect("");
+            let character_name = String::from_utf16_lossy(&character_name_trimmed);
 
             // Gender
-            let gender = Gender::try_from(slot.player_game_data.gender).expect("");
+            let gender = Gender::try_from(slot.player_game_data.gender).map_err(|_| anyhow!("Invalid gender"))?;
 
             // Weapon Level
             let weapon_level = slot.player_game_data.match_making_wpn_lvl;
 
-            Self {
-                steam_id,
-                character_name,
-                gender,
-                weapon_level,
-            }
+            Ok(
+                Self {
+                    steam_id,
+                    character_name,
+                    gender,
+                    weapon_level,
+                }
+            )
         }
     }
 }
